@@ -1,10 +1,17 @@
-# Rejected ideas
+# Rejected / Unavailable Papers
 
-Use this folder for paper ideas rejected before strategy testing.
+Tracking-only log for papers that the remote agent identified but did not
+push to `intake/ready_for_local_ai.jsonl`.
 
-Each rejection should explain:
+Common reasons:
 
-- source paper(s),
-- why the idea is not testable or not useful,
-- lookahead/data/broker-rule issue,
-- whether it can be revisited later.
+- Source removed at author / SSRN / rights-holder request.
+- Paywalled with no open-access mirror.
+- Score below the action threshold (see
+  `docs/REMOTE_PAPER_AGENT_PROMPT.md`).
+- Duplicate of an already-collected paper.
+
+Machine-readable list: `rejected_papers.csv`.
+
+No strategy claims are made here. Rejection only reflects collection
+availability or topical fit, not any backtest outcome.

@@ -1,93 +1,115 @@
 # prop-paper-intelligence
 
-Research-paper intelligence repo for turning academic/trading papers into **testable prop-firm strategy hypotheses**.
+**Paper-intake repository only.**
 
-This repo is the upstream research funnel. It should not make final trading claims. It extracts, scores, filters, and packages ideas so a separate strategy tester can run no-lookahead backtests, stress costs, rolling prop-firm evaluation, and decision memos.
+This repo collects, scores, and queues academic / SSRN research papers for
+downstream review. It is **not** a strategy tester. It runs no backtests,
+makes no claims about edge magnitude, and certifies nothing as live-ready.
 
-## Pipeline
+## System boundary
 
-```text
-papers/raw PDFs
-    ↓ Stage 1 extraction
-papers/extracted markdown notes
-    ↓ Stage 2 scoring/filtering
-metadata/paper_scores.csv + notes/topic maps
-    ↓ Stage 3 candidate generation
-candidates/*.yaml
-    ↓ handoff
-handoff/ready_for_strategy_tester/*.yaml
-    ↓ external strategy tester
-backtest + stress validation + decision memo
+There are three components in the broader workflow. Only the first lives
+here.
+
+```
+[1] Remote paper agent        --> THIS REPO
+    - Searches SSRN + academic sources
+    - Downloads legally available PDFs
+    - Saves metadata
+    - Scores 0-15 with the rubric in docs/REMOTE_PAPER_AGENT_PROMPT.md
+    - Pushes ranked PDFs + metadata
+
+[2] Local AI                  --> separate workspace
+    - Pulls this repo
+    - Reads PDFs + metadata
+    - Extracts hypotheses, edges, lookahead risks
+    - Produces candidate specs
+    - Output does NOT come back into this repo
+
+[3] Local strategy tester     --> separate repo
+    - Receives candidate specs from [2]
+    - Runs no-lookahead backtests
+    - Simulates prop-firm pass/fail rules
+    - Decides what is usable
 ```
 
-## Rules
-
-- Papers create **hypotheses**, not validated strategies.
-- Do not claim an 80%+ pass rate from paper evidence alone.
-- A candidate is only usable after no-lookahead validation in the strategy tester.
-- Every candidate must list source papers, data requirements, lookahead risks, and validation gates.
-- The strategy tester decides final status: `rejected`, `research_promising`, `pass_ready_candidate`, `forward_validation_ready`, or `live_ready`.
+**No paper, ranking, or PDF in this repo proves an 80% prop-firm pass rate
+or any pass rate at all.** Papers are hypotheses to be tested, not
+strategies that work.
 
 ## Directory layout
 
-```text
+```
 papers/
-  raw/                  # original PDFs or paper downloads; can use Git LFS if large
-  extracted/            # markdown extraction per paper
+  raw/                            # downloaded PDFs only
 metadata/
-  ssrn_prop_research_sources.csv
+  selected_30_high_value_papers.csv
+  selected_30_pdf_links.csv
   paper_scores.csv
-notes/
-  ssrn_prop_research_intake_decision.md
-  topic notes
-candidates/
-  candidate YAML/JSON files ready for review
-handoff/
-  ready_for_strategy_tester/  # only validated-format candidates go here
+  ssrn_prop_research_sources.csv  # broader source corpus
+intake/
+  ready_for_local_ai.jsonl        # machine-readable queue for local AI
+rankings/
+  latest_paper_ranking.md         # human-readable ranked shortlist
 rejected/
-  ideas rejected before testing, with reason
+  rejected_papers.csv             # unavailable / low-quality / out-of-scope
+docs/
+  REMOTE_PAPER_AGENT_PROMPT.md
+  LOCAL_AI_HANDOFF.md
 scripts/
-  validation and extraction utilities
-templates/
-  reusable candidate and extraction templates
+  build_intake.py                 # regenerates intake JSONL + rankings
+  browsermcp_collect_pdfs.cjs     # PDF collection helper
+  browsermcp_sciencedirect_pdf.cjs
 ```
 
-## Current seeded research
+## Intake JSONL schema
 
-Initial SSRN-indexed corpus and memo are included:
+One row per downloaded PDF in `intake/ready_for_local_ai.jsonl`:
 
-- `metadata/ssrn_prop_research_sources.csv` — 221 source records.
-- `notes/ssrn_prop_research_intake_decision.md` — first strategy-research intake memo.
+```json
+{
+  "paper_id": "paper_01",
+  "rank": 1,
+  "title": "...",
+  "authors": ["..."],
+  "year": 2020,
+  "doi": "...",
+  "url": "...",
+  "pdf_path": "papers/raw/paper_01.pdf",
+  "source": "SSRN/Crossref/etc",
+  "concept_tags": ["gold_xau", "intraday_momentum_reversal"],
+  "priority_score": 55,
+  "relevance_score": 14,
+  "why_selected": "Short reason this paper is worth local AI extraction.",
+  "abstract": "... if available",
+  "local_ai_status": "new"
+}
+```
 
-Priority hypotheses from this seed:
+Rules:
 
-1. XAU/OANDA intraday momentum-reversal regime filter.
-2. XAU gold news-sentiment overlay.
-3. Gold volatility/liquidity/session seasonality filter.
-4. Independent commodity adaptive time-series momentum branch.
-5. Lower-priority gold/silver or fix-to-fix mean-reversion branch.
+- Every `pdf_path` must point to a real file under `papers/raw/`.
+- No fabricated metadata. Missing fields are empty strings or null.
+- Local AI flips `local_ai_status` to `"processed"` after extraction; no
+  extracted output is committed here.
 
-## Validate candidate files
+## Regenerating the intake queue
+
+After adding or removing PDFs / metadata rows:
 
 ```bash
-python scripts/validate_candidates.py candidates handoff/ready_for_strategy_tester
+python scripts/build_intake.py
 ```
 
-The validator checks required YAML fields and catches missing handoff information before candidates are sent to the strategy tester.
+This rebuilds:
 
-## Quant strategy tester handoff
+- `intake/ready_for_local_ai.jsonl`
+- `rankings/latest_paper_ranking.md`
+- `rejected/rejected_papers.csv`
 
-Finished research must be promoted into a digestible machine-readable handoff file:
+## See also
 
-```bash
-python scripts/promote_candidate_to_handoff.py candidates/<candidate_id>.yaml
-python scripts/validate_candidates.py handoff/ready_for_strategy_tester
-```
-
-Use these templates/contracts:
-
-- `templates/strategy_tester_handoff_template.yaml`
-- `templates/quant_tester_output_contract.md`
-- `handoff/README.md`
-
-The tester should receive precise experiment specs, not raw PDFs or vague summaries.
+- `docs/REMOTE_PAPER_AGENT_PROMPT.md` — instructions for the paper-finding
+  agent, including the 0–15 scoring rubric and action thresholds.
+- `docs/LOCAL_AI_HANDOFF.md` — instructions for the local AI that reads
+  this repo and produces hypothesis extractions for the strategy tester.
