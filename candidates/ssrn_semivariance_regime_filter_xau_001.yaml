@@ -1,0 +1,97 @@
+candidate_id: ssrn_semivariance_regime_filter_xau_001
+status: candidate_ready
+created_utc: 2026-05-19T19:55:00Z
+owner: cyberhooman
+
+source_papers:
+  - doi: 10.2139/ssrn.3584014
+    title: "Time Series Momentum and Reversal: Intraday Information from Realized Semivariance"
+    year: 2020
+    relevance_note: Motivates using upside/downside realized semivariance to distinguish momentum vs reversal regimes.
+  - doi: 10.2139/ssrn.3577431
+    title: Intraday Momentum in Chinese Commodity Futures Markets
+    year: 2020
+    relevance_note: Supports testing intraday continuation effects in commodity futures.
+  - doi: 10.1002/fut.22084
+    title: "Intraday time-series momentum: Evidence from China"
+    year: 2020
+    relevance_note: Reports first-session/early-return predictive structure in commodity futures, especially metals.
+
+strategy_family: regime_filter
+target_system: xauusd_oanda_nsp_30m
+instrument_scope:
+  - XAUUSD
+
+timeframe_scope:
+  - 30m
+
+hypothesis: >
+  Prior closed-bar realized semivariance, intraday momentum state, volatility
+  percentile, and session bucket can filter weak XAUUSD OANDA 30m NSP pullback
+  trades and improve or preserve rolling prop-firm pass rate while reducing
+  drawdown/failure windows under stress costs.
+
+features:
+  - name: rolling_upside_semivariance
+    definition: Sum or mean of squared positive closed-bar returns over N prior bars.
+    lookahead_rule: Use only bars fully closed before the confirmed NSP signal candle.
+  - name: rolling_downside_semivariance
+    definition: Sum or mean of squared negative closed-bar returns over N prior bars.
+    lookahead_rule: Use only bars fully closed before the confirmed NSP signal candle.
+  - name: intraday_momentum_state
+    definition: Direction and magnitude of return from session anchor to the last closed pre-signal bar.
+    lookahead_rule: Session anchor and last closed bar must be known before signal confirmation.
+  - name: atr_percentile
+    definition: Current ATR relative to rolling historical ATR distribution.
+    lookahead_rule: ATR percentile must be calculated with expanding/rolling history excluding future bars.
+  - name: session_bucket
+    definition: Asia, London open, London/NY overlap, NY open, COMEX-active, late-NY/quiet buckets.
+    lookahead_rule: Deterministic timestamp feature only.
+
+entry_logic_change: none
+filter_logic:
+  allow_trade_when:
+    - semivariance_state is not strongly adverse to trade direction
+    - atr_percentile is not in a historically poor bucket
+    - session_bucket is not blocked by validation results
+  block_trade_when:
+    - downside/upside semivariance imbalance indicates adverse continuation risk
+    - session_bucket has negative rolling pass contribution under stress costs
+
+risk_model:
+  account_model: FTMO 2-Step Challenge Phase 1 100K
+  risk_per_trade: inherit_current_xau_oanda_candidate_or_grid
+  daily_loss_block: inherit_current_xau_oanda_candidate_or_grid
+  cost_profile: stress_1p2pt_comm0_plus_wider_stress_grid
+
+data_required:
+  - OANDA XAUUSD 30m OHLC history
+  - current NSP signal/trade reconstruction
+  - session calendar/timezone mapping
+
+lookahead_risk:
+  status: controllable
+  notes: >
+    Main risk is accidentally using the signal candle close/range in regime
+    features before the confirmed signal exists. Tester must compute features
+    from bars closed before or at allowed signal-confirmation time only.
+
+validation_required:
+  - baseline current XAU OANDA NSP comparison
+  - no-lookahead timing audit
+  - stress spread/slippage/commission grid
+  - rolling prop-firm pass rate
+  - drawdown/failure-window attribution
+  - decision memo under strategy tester results folder
+
+promotion_rule: >
+  Promote only if rolling pass rate remains at or above target and drawdown or
+  failed windows improve under stress costs. Do not promote if improvement is
+  only raw win rate or in-sample PnL.
+
+handoff:
+  target_repo: prop-firm-research
+  suggested_script: xauusd_oanda_ssrn_regime_filter_research.py
+  expected_outputs:
+    - orb_backtest/results/xauusd_oanda_ssrn_regime_filter_summary.csv
+    - orb_backtest/results/xauusd_oanda_ssrn_regime_filter_decision.md

@@ -1,0 +1,19 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Large/raw paper artifacts can be tracked intentionally or via Git LFS.
+# Uncomment if you want PDFs kept local-only:
+# papers/raw/*.pdf
+
+# Local scratch
+scratch/
+logs/

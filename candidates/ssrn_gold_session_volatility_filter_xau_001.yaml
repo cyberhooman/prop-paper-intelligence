@@ -1,0 +1,94 @@
+candidate_id: ssrn_gold_session_volatility_filter_xau_001
+status: candidate_ready
+created_utc: 2026-05-20T03:59:00Z
+owner: cyberhooman
+
+source_papers:
+  - doi: 10.2139/ssrn.3021533
+    title: "Intraday Seasonality in Efficiency, Liquidity, Volatility and Volume: Platinum and Gold Futures in Tokyo and New York"
+    year: 2017
+    relevance_note: Directly motivates gold session/market microstructure buckets.
+  - doi: 10.2139/ssrn.4359812
+    title: "Forecasting Intraday Volatility: Evidence from China Gold Futures Market"
+    year: 2023
+    relevance_note: Directly motivates gold intraday volatility forecasting features.
+  - doi: 10.2139/ssrn.2626040
+    title: "Liquidity and Volatility in the Chinese Commodity Futures Market: Evidence from Intraday Data"
+    year: 2015
+    relevance_note: Supports intraday liquidity/volatility filters for commodity futures.
+
+strategy_family: session_filter
+target_system: xauusd_oanda_nsp_30m
+instrument_scope:
+  - XAUUSD
+  - MGC
+
+timeframe_scope:
+  - 30m
+  - 5m
+
+hypothesis: >
+  Gold intraday session, volatility, and liquidity regimes can identify XAUUSD
+  NSP/VBR trades with poor prop-firm path behavior. Filtering or resizing these
+  regimes should improve stress-cost rolling pass robustness.
+
+features:
+  - name: session_bucket
+    definition: Asia, Tokyo, London open, London fix, NY open, London/NY overlap, COMEX active, late NY.
+    lookahead_rule: Timestamp-only feature; no future market data.
+  - name: intraday_volatility_forecast
+    definition: Rolling/expanding forecast from prior closed-bar ranges/returns and time-of-day seasonality.
+    lookahead_rule: Forecast must be fit only on data available before the trade date/time.
+  - name: liquidity_proxy
+    definition: Volume if available, otherwise bar range/spread proxy and session-time liquidity prior.
+    lookahead_rule: Use prior closed bars or deterministic session priors only.
+  - name: range_expansion_state
+    definition: Current rolling ATR/range percentile versus same-session historical distribution.
+    lookahead_rule: Exclude current unclosed bar and all future bars.
+
+entry_logic_change: none
+filter_logic:
+  allow_trade_when:
+    - session_bucket has acceptable historical rolling stress behavior
+    - volatility forecast is within validated robust range
+  block_trade_when:
+    - session_bucket historically causes drawdown/failure windows
+    - liquidity proxy implies high spread/slippage risk
+
+risk_model:
+  account_model: FTMO 2-Step Challenge Phase 1 100K and optional futures prop presets
+  risk_per_trade: inherit_current_xau_oanda_candidate_or_grid
+  daily_loss_block: inherit_current_xau_oanda_candidate_or_grid
+  cost_profile: stress_grid_with_session_specific_spread_widening
+
+data_required:
+  - OANDA XAUUSD 30m OHLC history
+  - optional MGC 5m/30m proxy history
+  - session/timezone calendar
+  - optional volume/spread proxy data
+
+lookahead_risk:
+  status: controllable
+  notes: >
+    Main risk is fitting volatility/session buckets on the full sample. Use
+    rolling or expanding training windows, and compute all labels from known
+    prior history only.
+
+validation_required:
+  - baseline current XAU OANDA NSP comparison
+  - no-lookahead feature timestamp audit
+  - session-by-session attribution
+  - stress spread/slippage/commission grid
+  - rolling prop-firm pass rate
+  - decision memo under strategy tester results folder
+
+promotion_rule: >
+  Promote only if session/volatility filtering reduces drawdowns or failed
+  windows and does not merely overfit by removing too many trades.
+
+handoff:
+  target_repo: prop-firm-research
+  suggested_script: xauusd_oanda_session_volatility_filter_research.py
+  expected_outputs:
+    - orb_backtest/results/xauusd_oanda_session_volatility_filter_summary.csv
+    - orb_backtest/results/xauusd_oanda_session_volatility_filter_decision.md
